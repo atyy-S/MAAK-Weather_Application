@@ -10,20 +10,23 @@
 - Kyle Nolan
 
 ## Course Information
-**CS 480 **  
+**CS 480 Advanced Software Engineering**  
 Instructor: **Dr.Nathan White**
+Central Washington University
 
 ## Introduction
-This is a weather website.
+This is a weather application that uses third-party APIs to gather weather-related data the user is interested in and display it to the user.
 
 **Source:** 
-SRS:
-Design:
-
-This website allows users to save up to 10 locations and display the  weather of the current location
+MAAK SRS document:
+MAAK Design document:
 
 ## Project Overview
+- This website allows users to display the current weather information in their location, including a weather radar. 
+- allows the user to save up to 10  favorite locations & display them when the user selects the location
+- This weather application also has an authentication feature; users need to create an account or log in using email & passwords
 
 ## Slides
-(https://docs.google.com/presentation/d/1RbDlXR6I4d0cQqor7lIw_f4BciDRTfI3MAaQQ5k8LOo/edit?usp=sharing)
+will be provided once we created
+
 
