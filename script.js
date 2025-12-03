@@ -45,7 +45,7 @@ function showPosition(position) {
     .then(locationData => {
       const city = locationData.city || locationData.locality || "Unknown Location";
 
-      // Now fetch weather from Open-Meteo
+      // fetch weather from Open-Meteo
       const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&temperature_unit=fahrenheit`;
 
       fetch(weatherUrl)
