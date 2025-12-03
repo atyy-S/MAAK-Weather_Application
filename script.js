@@ -11,7 +11,7 @@ function closeNav() {
   document.getElementById("main").style.marginLeft = "0";
 }
 
-/*forecaset*/
+/*forecast*/
 function openForecast() {
   document.querySelector(".showPosition").style.width = "300px";
 }
