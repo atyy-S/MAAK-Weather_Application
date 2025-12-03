@@ -2,10 +2,13 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
+
   <title>Weather by G3</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
 <div id="mySidenav" class="sidenav">
@@ -15,14 +18,26 @@
   <a href="#">Login/Register</a>
 </div>
 
-<div id="main" class="body" style="text-align: right;">
+<div id="main"  style="text-align: right;">
   <span style="font-size:30px;cursor:pointer" onclick="openNav()">&#9776;</span>
 </div>
 
-<h1>My Location</h1>
-<h2 id="city">Fetching location...</h2>
-<p id="weather">Loading weather...</p>
+ <div class=" body">
+<h2> My Location</h2>
+<h1 id="city">Fetching location...</h1>
+<h3 id="weather">Loading weather...</h3>
 
 <script src="script.js"></script>
+</div>
+
+
+<!-- Weather position in web-->
+<div class="showPosition">
+    <button onclick="openForecast()">Show Forecast</button>
+    <div id="forecast"></div>
+    <div id="radar"></div>
+
+</div>
+
 </body>
 </html>
