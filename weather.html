@@ -1,0 +1,28 @@
+<!-- Main page with weather information-->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Weather by G3</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="mySidenav" class="sidenav">
+  <a href="javascript:void(0)" class="closebtn" onclick="closeNav()">&times;</a>
+  <a href="#">Search Location</a>
+  <a href="#">Favorites</a>
+  <a href="#">Login/Register</a>
+</div>
+
+<div id="main" class="body" style="text-align: right;">
+  <span style="font-size:30px;cursor:pointer" onclick="openNav()">&#9776;</span>
+</div>
+
+<h1>My Location</h1>
+<h2 id="city">Fetching location...</h2>
+<p id="weather">Loading weather...</p>
+
+<script src="script.js"></script>
+</body>
+</html>
