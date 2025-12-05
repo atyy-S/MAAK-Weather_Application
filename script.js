@@ -1,7 +1,10 @@
-// JavaScript for menu, API calls, and geolocation
+// ================================
+//  Navigation Menu Functions👌
+// ================================
 
-/** Navigation Menu Functions:
- * Opens the side navigation menu*/
+const activeBlobUrls = new Set();
+
+/**Opens the side navigation menu*/
 function openNav() {
     document.getElementById("mySidenav").style.width = "250px";
 }
@@ -24,9 +27,7 @@ const weatherIcons = {
     'wind': '💨'
 };
 
-
 // Sample forecast data (will be replaced with API data)
-
 const sampleForecast = [
     { day: 'Today', high: 45, low: 40, condition: 'Cloudy' },
     { day: 'Monday', high: 50, low: 45, condition: 'Partly Cloudy' },
@@ -40,7 +41,7 @@ const sampleForecast = [
     { day: 'Tuesday', high: 45, low: 40, condition: 'Cloudy' }
 ];
 
-/** Returns appropriate weather icon class based on condition string */
+/** Returns appropriate weather icon based on condition string */
 function getWeatherIcon(condition) {
     const conditionLower = condition.toLowerCase();
     if (conditionLower.includes('sunny') || conditionLower.includes('clear')) return weatherIcons.sunny;
@@ -65,7 +66,7 @@ function populateForecast() {
         forecastItem.innerHTML = `
             <div class="forecast-day-info">
                 <span class="day-name">${day.day}</span>
-                <i class="${iconClass} forecast-icon"></i>
+                
             </div>
             <div class="forecast-temps">
                 <span class="temp-high">${day.high}°</span>
@@ -73,114 +74,462 @@ function populateForecast() {
                 <span class="temp-low">${day.low}°</span>
             </div>
             <div class="forecast-condition">${day.condition}</div>
+            <span class="forecast-icon">${iconClass}</span>
         `;
         
         forecastList.appendChild(forecastItem);
     });
 }
 
-// ================================
-// Radar Functions
-// ================================
-
-/** Updates radar location text in UI */
-function updateRadarLocation(city) {
-    const radarLocation = document.getElementById('radarLocation');
-    if (radarLocation) {
-        radarLocation.textContent = city;
-    }
-}
-
-/** Updates radar timestamp with current time */
-function updateRadarTime() {
-    const now = new Date();
-    const timeString = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-    const radarTime = document.getElementById('radarTime');
-    if (radarTime) {
-        radarTime.textContent = timeString;
-    }
-}
-
-/** Determines nearest radar station based on latitude/longitude */
-function getNearestRadarStationFromCoords(lat, lon) {
-    // Simple region detection based on coordinates to select radar station
-    let station = 'KSEA'; // Default Seattle station
+// NOAA radar color palette for reflectivity (dBZ)
+const noaaRadarPalette = {
+    colors: [
+        { value: 5, color: '#04e9e7' },
+        { value: 10, color: '#019ff4' },
+        { value: 15, color: '#0300f4' },
+        { value: 20, color: '#02fd02' },
+        { value: 25, color: '#01c501' },
+        { value: 30, color: '#008e00' },
+        { value: 35, color: '#fdf802' },
+        { value: 40, color: '#e5bc00' },
+        { value: 45, color: '#fd9500' },
+        { value: 50, color: '#fd0000' },
+        { value: 55, color: '#d40000' },
+        { value: 60, color: '#bc0000' },
+        { value: 65, color: '#f800fd' },
+        { value: 70, color: '#9854c6' }
+    ],
     
-    if (lat > 40 && lon < -100) station = 'KMPX'; // Midwest
-    if (lat > 40 && lon > -100) station = 'KBOS'; // Northeast
-    if (lat < 40 && lon < -100) station = 'KHGX'; // South
-    if (lat > 45 && lon < -120) station = 'KATX'; // Northwest (Washington)
-    
-    return station;
-}
+    getColorForDbz(dbz) {
+        for (const item of this.colors) {
+            if (dbz <= item.value) return item.color;
+        }
+        return '#ffffff';
+    }
+};
 
-function simulateRadarAnimation() {
-    // Create radar sweep animation
-    const radarSweep = document.querySelector('.radar-sweep');
-    if (radarSweep) {
-        radarSweep.style.animation = 'radarSweep 3s linear infinite';
+// Station cache
+let radarStationsCache = [];
+
+async function fetchAndCacheRadarStations() {
+    try {
+        const response = await fetch('https://api.weather.gov/radar/stations');
+        if (!response.ok) throw new Error('Failed to fetch stations');
+        
+        const data = await response.json();
+        radarStationsCache = data.features || [];
+        return radarStationsCache;
+    } catch (error) {
+        console.error('Error fetching radar stations:', error);
+        return [];
     }
 }
 
-// LOAD RADAR IMAGE FUNCTION
-function loadRadarImage(station) {
+function findNearestStation(lat, lon, stations) {
+    if (!stations || stations.length === 0) return null;
+    
+    let nearest = null;
+    let minDistance = Infinity;
+    
+    stations.forEach(station => {
+        const stationLat = station.geometry?.coordinates?.[1];
+        const stationLon = station.geometry?.coordinates?.[0];
+        
+        if (stationLat && stationLon) {
+            const distance = calculateDistance(lat, lon, stationLat, stationLon);
+            if (distance < minDistance) {
+                minDistance = distance;
+                nearest = station;
+            }
+        }
+    });
+    
+    return nearest;
+}
+
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+// Simplified getLatestRadarImage that returns direct URL
+async function getLatestRadarImage(stationId) {
+    // Common radar products in order of preference
+    const radarProducts = [
+        { code: 'N0R', name: 'Base Reflectivity' },
+        { code: 'N0S', name: 'Short Range' },
+        { code: 'N0C', name: 'Composite Reflectivity' }
+    ];
+    
+    // Generate URLs for each product
+    const radarUrls = [];
+    radarProducts.forEach(product => {
+        radarUrls.push(`https://radar.weather.gov/ridge/RadarImg/${product.code}/${stationId}_${product.code}_0.gif`);
+    });
+    
+    // Always include standard and lite versions
+    radarUrls.push(`https://radar.weather.gov/ridge/standard/${stationId}_0.gif`);
+    radarUrls.push(`https://radar.weather.gov/ridge/lite/${stationId}_0.gif`);
+    
+    console.log(`Testing radar URLs for station: ${stationId}`);
+    
+    // Test which URL works by creating image elements
+    for (let i = 0; i < radarUrls.length; i++) {
+        const url = radarUrls[i];
+        console.log(`Testing URL ${i + 1}: ${url}`);
+        
+        try {
+            // Test if the image loads by creating a test image
+            const testResult = await testImageUrl(url);
+            if (testResult.works) {
+                console.log(`✓ Found working radar URL: ${url}`);
+                return {
+                    url: url,
+                    timestamp: new Date().toISOString(),
+                    elevation: 0.5,
+                    source: url,
+                    productName: getProductNameFromUrl(url)
+                };
+            }
+        } catch (error) {
+            console.log(`✗ URL failed: ${url}`);
+            continue;
+        }
+    }
+    
+    console.error(`No working radar URLs found for station ${stationId}`);
+    return null;
+}
+
+// Helper function to test if an image URL loads
+function testImageUrl(url) {
+    return new Promise((resolve, reject) => {
+        const testImg = new Image();
+        testImg.onload = () => resolve({ works: true, url: url });
+        testImg.onerror = () => reject(new Error(`Failed to load: ${url}`));
+        
+        // Set timeout to prevent hanging
+        setTimeout(() => reject(new Error(`Timeout loading: ${url}`)), 5000);
+        
+        testImg.src = url;
+    });
+}
+
+// Helper to get product name from URL
+function getProductNameFromUrl(url) {
+    if (url.includes('N0R')) return 'Base Reflectivity';
+    if (url.includes('N0S')) return 'Short Range';
+    if (url.includes('N0C')) return 'Composite Reflectivity';
+    if (url.includes('/standard/')) return 'Standard Radar';
+    if (url.includes('/lite/')) return 'Lite Radar';
+    return 'Radar';
+}
+
+// Cleanup function
+function cleanupOldBlobUrls(keepUrl = null) {
+    const urlsToRevoke = [];
+    
+    activeBlobUrls.forEach(url => {
+        if (url !== keepUrl) {
+            urlsToRevoke.push(url);
+        }
+    });
+    
+    urlsToRevoke.forEach(url => {
+        URL.revokeObjectURL(url);
+        activeBlobUrls.delete(url);
+    });
+    
+    console.log(`Cleaned up ${urlsToRevoke.length} old blob URLs`);
+}
+
+// Load local radar - using direct image URLs
+async function loadLocalRadar(lat, lon) {
     const radarImg = document.getElementById('radarImage');
     const radarAnimation = document.querySelector('.radar-animation');
     const radarStationText = document.getElementById('radarStationText');
     
     if (!radarImg) return;
     
-    // Update station text
-    if (radarStationText) {
-        radarStationText.textContent = `Radar Station: ${station}`;
-    }
-    
-    // Hide animation initially (will show if image fails)
+    // Show loading animation
     if (radarAnimation) {
-        radarAnimation.style.display = 'none';
+        radarAnimation.style.display = 'flex';
+        radarAnimation.innerHTML = `
+            <div class="radar-circle"></div>
+            <div class="radar-sweep"></div>
+            <p>Loading local radar...</p>
+        `;
+        simulateRadarAnimation();
     }
     
-    // Set up image event handlers
-    radarImg.onload = function() {
-        // Image loaded successfully - show it and hide animation
-        radarImg.style.display = 'block';
-        if (radarAnimation) {
-            radarAnimation.style.display = 'none';
+    radarImg.style.display = 'none';
+    
+    try {
+        let stations = radarStationsCache;
+        if (stations.length === 0) {
+            stations = await fetchAndCacheRadarStations();
         }
+        
+        const nearestStation = findNearestStation(lat, lon, stations);
+        
+        if (!nearestStation) {
+            throw new Error('No radar stations found');
+        }
+        
+        const stationId = nearestStation.properties?.id;
+        const stationName = nearestStation.properties?.name || stationId;
+        
+        if (radarStationText) {
+            radarStationText.style.display = 'block';
+            const distance = calculateDistance(
+                lat, lon,
+                nearestStation.geometry.coordinates[1],
+                nearestStation.geometry.coordinates[0]
+            );
+            radarStationText.textContent = `${stationName} (${Math.round(distance)} km away)`;
+        }
+        
+        // Get radar data; returns direct URL
+        const radarData = await getLatestRadarImage(stationId);
+        
+        if (radarData) {
+            console.log(`Setting radar image src to: ${radarData.url}`);
+            
+            // Clear any previous handlers
+            radarImg.onload = null;
+            radarImg.onerror = null;
+            
+            // Set up new handlers
+            radarImg.onload = function() {
+                console.log('Radar image loaded successfully');
+                radarImg.style.display = 'block';
+                if (radarAnimation) radarAnimation.style.display = 'none';
+                updateRadarTime();
+                
+                // Update radar info
+                const radarTime = document.getElementById('radarTime');
+                if (radarTime) {
+                    const time = new Date(radarData.timestamp).toLocaleTimeString([], { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    });
+                    radarTime.textContent = `Updated: ${time}`;
+                }
+                
+                // Update radar info text if available
+                const radarInfo = document.getElementById('radarInfo');
+                if (radarInfo) {
+                    radarInfo.textContent = `${radarData.productName} - ${stationName}`;
+                }
+            };
+            
+            radarImg.onerror = function() {
+                console.warn('Station radar failed to load, falling back to CONUS');
+                loadCONUSRadarAsFallback();
+            };
+            
+            // Set the image source; browser handles cross-origin for img tags then Add cache buster to prevent caching issues
+            radarImg.src = radarData.url + '?t=' + Date.now();
+            return;
+        }
+        
+        throw new Error('Could not load radar image');
+        
+    } catch (error) {
+        console.error('Error loading local radar:', error);
+        loadCONUSRadarAsFallback();
+    }
+}
+
+// CONUS fallback; uses direct image URL
+async function loadCONUSRadarAsFallback() {
+    const radarImg = document.getElementById('radarImage');
+    const radarAnimation = document.querySelector('.radar-animation');
+    const radarStationText = document.getElementById('radarStationText');
+    
+    if (radarStationText) {
+        radarStationText.style.display = 'block';
+        radarStationText.textContent = 'US Radar Overview (CONUS)';
+    }
+    
+    if (radarAnimation) {
+        radarAnimation.style.display = 'flex';
+        radarAnimation.innerHTML = `
+            <div class="radar-circle"></div>
+            <div class="radar-sweep"></div>
+            <p>Loading nationwide radar...</p>
+        `;
+        simulateRadarAnimation();
+    }
+    
+    // Direct CONUS radar URL
+    const conusUrl = 'https://radar.weather.gov/ridge/Conus/RadarImg/latest.gif';
+    
+    // Clear any previous handlers
+    radarImg.onload = null;
+    radarImg.onerror = null;
+    
+    radarImg.onload = function() {
+        console.log('CONUS radar loaded successfully');
+        radarImg.style.display = 'block';
+        if (radarAnimation) radarAnimation.style.display = 'none';
         updateRadarTime();
+        
+        // Update radar info
+        const radarTime = document.getElementById('radarTime');
+        if (radarTime) {
+            const time = new Date().toLocaleTimeString([], { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+            radarTime.textContent = `Updated: ${time}`;
+        }
     };
     
     radarImg.onerror = function() {
-        // Image failed to load - show animation instead
-        radarImg.style.display = 'none';
+        console.error('CONUS radar failed');
         if (radarAnimation) {
-            radarAnimation.style.display = 'flex';
-            simulateRadarAnimation();
+            radarAnimation.innerHTML = `
+                <div class="radar-circle error"></div>
+                <p>Radar temporarily unavailable</p>
+                <p>Please check back later or try refreshing</p>
+            `;
         }
         updateRadarTime();
     };
     
-    // Load the radar image with cache busting
-   const radarUrl = `https://radar.weather.gov/ridge/RadarImg/N0R/${station}_N0R_0.gif?${Date.now()}`;
-
-    radarImg.src = radarUrl;
+    // Set the image source with cache buster
+    radarImg.src = conusUrl + '?t=' + Date.now();
 }
 
-// REFRESH RADAR FUNCTION
-function refreshRadar() {
-    // Get current station
-    const radarStationText = document.getElementById('radarStationText');
-    let station = 'KATX'; // Default
+// NOAA legend creation
+function createNOAALegend() {
+    const legendContainer = document.createElement('div');
+    legendContainer.className = 'noaa-radar-legend';
     
-    if (radarStationText && radarStationText.textContent.includes('Radar Station:')) {
-        station = radarStationText.textContent.split(':')[1].trim();
+    let legendHTML = `
+        <div class="legend-title">NOAA Radar Intensity (dBZ)</div>
+        <div class="legend-scale">
+    `;
+    
+    const palette = noaaRadarPalette.colors;
+    for (let i = 0; i < palette.length; i++) {
+        const current = palette[i];
+        const next = palette[i + 1];
+        const rangeText = next 
+            ? `${current.value}-${next.value}`
+            : `${current.value}+`;
+        
+        legendHTML += `
+            <div class="legend-item">
+                <span class="color-bar" style="background-color: ${current.color}"></span>
+                <span class="dbz-value">${rangeText}</span>
+            </div>
+        `;
     }
     
-    // Show loading state
+    legendHTML += `
+        </div>
+        <div class="legend-description">
+            dBZ = decibels of reflectivity<br>
+            Higher values indicate heavier precipitation
+        </div>
+        <div class="legend-source">Source: NOAA/NWS</div>
+    `;
+    
+    legendContainer.innerHTML = legendHTML;
+    
+    const radarContainer = document.querySelector('.radar-container');
+    if (radarContainer) {
+        const oldLegend = radarContainer.querySelector('.noaa-radar-legend');
+        if (oldLegend) oldLegend.remove();
+        
+        radarContainer.appendChild(legendContainer);
+    }
+}
+
+function updateRadarTime() {
+    const now = new Date();
+    const timeString = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    const radarTime = document.getElementById('radarTime');
+    if (radarTime) {
+        radarTime.textContent = `Last updated: ${timeString}`;
+    }
+}
+
+function simulateRadarAnimation() {
+    const radarSweep = document.querySelector('.radar-sweep');
+    if (radarSweep) {
+        radarSweep.style.animation = 'radarSweep 3s linear infinite';
+    }
+}
+
+async function showPosition(position) {
+    const lat = position.coords.latitude;
+    const lon = position.coords.longitude;
+    
+    const geoUrl = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`;
+    
+    fetch(geoUrl)
+        .then(response => response.json())
+        .then(locationData => {
+            const city = locationData.city || locationData.locality || "Unknown Location";
+            document.getElementById("city").innerText = city;
+            
+            const radarLocation = document.getElementById('radarLocation');
+            if (radarLocation) {
+                const state = locationData.principalSubdivision || '';
+                radarLocation.textContent = `${city}${state ? ', ' + state : ''}`;
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching location:', error);
+            document.getElementById("city").innerText = "Your Location";
+        });
+    
+    await loadLocalRadar(lat, lon);
+    createNOAALegend();
+    
+    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&temperature_unit=fahrenheit&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=auto&forecast_days=14`;
+    
+    fetch(weatherUrl)
+        .then(response => response.json())
+        .then(weatherData => {
+            document.getElementById("weather").innerText = `${weatherData.current_weather.temperature}°F`;
+            
+            const condition = getConditionFromCode(weatherData.current_weather.weathercode);
+            document.getElementById("condition").innerText = condition;
+            
+            if (weatherData.daily) {
+                updateForecastFromAPI(weatherData.daily);
+            } else {
+                populateForecast();
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching weather:', error);
+            document.getElementById("weather").innerText = "Error";
+            populateForecast();
+        });
+}
+
+async function refreshRadar() {
     const radarImg = document.getElementById('radarImage');
     const radarAnimation = document.querySelector('.radar-animation');
     
-    if (radarImg) radarImg.style.display = 'none';
+    cleanupOldBlobUrls(); // Clean up old blob URLs if any exist
+    
+    if (radarImg) {
+        radarImg.style.display = 'none';
+    }
+    
     if (radarAnimation) {
         radarAnimation.style.display = 'flex';
         radarAnimation.innerHTML = `
@@ -191,74 +540,22 @@ function refreshRadar() {
         simulateRadarAnimation();
     }
     
-    // Load new image after a short delay
-    setTimeout(() => {
-        loadRadarImage(station);
-    }, 500);
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const lat = position.coords.latitude;
+                const lon = position.coords.longitude;
+                await loadLocalRadar(lat, lon);
+            },
+            () => {
+                loadCONUSRadarAsFallback();
+            }
+        );
+    } else {
+        loadCONUSRadarAsFallback();
+    }
 }
 
-/** Geolocation & Weather API Functions:
- * Checks if browser supports geolocation and requests user's location*/
-if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(showPosition, showError);
-} else {
-    document.getElementById("city").innerText = "Geolocation not supported.";
-}
-
-// Handles successful geolocation
-function showPosition(position) {
-    const lat = position.coords.latitude;
-    const lon = position.coords.longitude;
-
-    // Get radar station based on coordinates
-    const radarStation = getNearestRadarStationFromCoords(lat, lon);
-    
-    // Load radar image immediately
-    loadRadarImage(radarStation);
-
-    // Reverse geocoding to get city name
-    const geoUrl = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`;
-
-    fetch(geoUrl)
-        .then(response => response.json())
-        .then(locationData => {
-            const city = locationData.city || locationData.locality || "Unknown Location";
-            document.getElementById("city").innerText = city;
-            updateRadarLocation(city);
-
-            // Fetch weather from Open-Meteo
-            const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&temperature_unit=fahrenheit&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=auto`;
-
-            fetch(weatherUrl)
-                .then(response => response.json())
-                .then(weatherData => {
-                    document.getElementById("weather").innerText = `${weatherData.current_weather.temperature}°F`;
-                    
-                    // Update condition based on weathercode
-                    const condition = getConditionFromCode(weatherData.current_weather.weathercode);
-                    document.getElementById("condition").innerText = condition;
-                    
-                    // Populate forecast with real data if available
-                    if (weatherData.daily) {
-                        updateForecastFromAPI(weatherData.daily);
-                    } else {
-                        populateForecast(); // Use sample data
-                    }
-                })
-                .catch(error => {
-                    console.error('Error fetching weather:', error);
-                    document.getElementById("weather").innerText = "Error fetching weather.";
-                    populateForecast(); // Use sample data on error
-                });
-        })
-        .catch(error => {
-            console.error('Error fetching location:', error);
-            document.getElementById("city").innerText = "Error fetching city name.";
-            populateForecast(); // Use sample data on error
-        });
-}
-
-// Convert WMO weather code to condition human-readable conditions 
 function getConditionFromCode(code) {
     if (code === 0) return 'Clear sky';
     if (code <= 3) return 'Partly cloudy';
@@ -270,16 +567,6 @@ function getConditionFromCode(code) {
     return 'Unknown';
 }
 
-/**
- * updateForecastFromAPI(dailyData):
- * Populates the forecast list in the DOM using real API data.
- * - Clears any existing forecast items.
- * - Loops through the next 10 days starting from today.
- * - Builds forecast items with day name, high/low temps, condition, and icon.
- * - Appends each forecast item to the forecast list container.
- 
- * @param {Object} dailyData - API response containing arrays of max/min temperatures and weather codes.
- */
 function updateForecastFromAPI(dailyData) {
     const forecastList = document.getElementById('forecastList');
     forecastList.innerHTML = '';
@@ -302,7 +589,7 @@ function updateForecastFromAPI(dailyData) {
         forecastItem.innerHTML = `
             <div class="forecast-day-info">
                 <span class="day-name">${dayName}</span>
-                                
+                
             </div>
             <div class="forecast-temps">
                 <span class="temp-low">${low}°</span>
@@ -311,13 +598,12 @@ function updateForecastFromAPI(dailyData) {
             </div>
             <div class="forecast-condition">${condition}</div>
             <span class="forecast-icon">${iconClass}</span>
-               `;
+        `;
         
         forecastList.appendChild(forecastItem);
     }
 }
 
-// Error handling when user denied geolocation request
 function showError(error) {
     switch(error.code) {
         case error.PERMISSION_DENIED:
@@ -333,21 +619,138 @@ function showError(error) {
             document.getElementById("city").innerText = "Location error occurred.";
             break;
     }
-    populateForecast(); // Show sample forecast even if location fails
+    populateForecast();
     simulateRadarAnimation();
 }
 
-// Initialize on page load
+// Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
-    populateForecast(); // Show sample data immediately
+    populateForecast();
     simulateRadarAnimation();
     updateRadarTime();
     
-    // Load a default radar image if no location is available yet
-    setTimeout(() => {
-        const radarImg = document.getElementById('radarImage');
-        if (radarImg && !radarImg.src) {
-            loadRadarImage('KATX'); // Load default radar
-        }
-    }, 1000);
+    // Pre-fetch radar stations
+    fetchAndCacheRadarStations();
+    
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            showPosition,
+            (error) => {
+                showError(error);
+                loadCONUSRadarAsFallback();
+                createNOAALegend();
+            }
+        );
+    } else {
+        loadCONUSRadarAsFallback();
+        createNOAALegend();
+    }
+    
+    // Clean up on page unload
+    window.addEventListener('beforeunload', () => {
+        cleanupOldBlobUrls();
+    });
+    
+    // Auto-refresh radar every 5 minutes
+    setInterval(refreshRadar, 5 * 60 * 1000);
 });
+
+// NOAA radar legend CSS
+const noaaLegendCSS = `
+    .noaa-radar-legend {
+        background: rgba(0, 0, 0, 0.85);
+        color: white;
+        border-radius: 8px;
+        padding: 12px;
+        margin-top: 15px;
+        font-size: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        border: 1px solid #333;
+    }
+    
+    .legend-title {
+        font-weight: bold;
+        margin-bottom: 10px;
+        text-align: center;
+        color: #4fc3f7;
+        font-size: 13px;
+    }
+    
+    .legend-scale {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        justify-content: center;
+        margin-bottom: 10px;
+    }
+    
+    .legend-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: 40px;
+    }
+    
+    .color-bar {
+        width: 100%;
+        height: 12px;
+        border-radius: 2px;
+        border: 1px solid rgba(255,255,255,0.3);
+        margin-bottom: 4px;
+    }
+    
+    .dbz-value {
+        font-size: 10px;
+        color: #ccc;
+    }
+    
+    .legend-description {
+        font-size: 10px;
+        text-align: center;
+        color: #aaa;
+        margin-bottom: 8px;
+        line-height: 1.3;
+    }
+    
+    .legend-source {
+        font-size: 9px;
+        text-align: center;
+        color: #888;
+        font-style: italic;
+    }
+    
+    @media (max-width: 768px) {
+        .noaa-radar-legend {
+            padding: 8px;
+        }
+        
+        .legend-scale {
+            gap: 4px;
+        }
+        
+        .legend-item {
+            min-width: 35px;
+        }
+        
+        .dbz-value {
+            font-size: 9px;
+        }
+    }
+    
+    @media (max-width: 480px) {
+        .legend-scale {
+            flex-direction: row;
+            flex-wrap: wrap;
+        }
+        
+        .legend-item {
+            flex: 1 0 calc(25% - 8px);
+            min-width: auto;
+        }
+    }
+`;
+
+// Add the NOAA legend CSS to the page
+const noaaLegendStyle = document.createElement('style');
+noaaLegendStyle.textContent = noaaLegendCSS;
+document.head.appendChild(noaaLegendStyle);
