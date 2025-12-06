@@ -1,4 +1,6 @@
 <?php
+session_start();
+$isLoggedIn = isset($_SESSION['user_id']);
 // index.php – Favorites list
 ?>
 <!DOCTYPE html>
@@ -8,8 +10,10 @@
     <title>Weather App – Favorites</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body data-page="favorites">
+<body data-page="favorites" data-logged-in="<?php echo $isLoggedIn ? '1' : '0'; ?>">
 <div class="app-page">
+
+    <button class="btn-primary" style="margin-bottom: 10px;" onclick="window.location.href='../index.php';">Home</button>
 
     <section class="panel">
         <h2>Favorites</h2>

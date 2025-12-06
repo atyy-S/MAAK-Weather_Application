@@ -6,34 +6,49 @@ const WEATHER_API_URL   = "https://api.open-meteo.com/v1/forecast";
 let favorites = [];    // loaded from DB
 let searchResults = []; // last search
 const MAX_FAVORITES = 10;
+let isLoggedIn = false;
+
 
 // modal state (shared)
 let modalOverlay, modalText, modalCancel, modalConfirm;
 let modalConfirmHandler = null;
 
 document.addEventListener("DOMContentLoaded", function () {
-    const page = document.body.getAttribute("data-page");
+    const page       = document.body.getAttribute("data-page");
+    const loggedAttr = document.body.getAttribute("data-logged-in");
+    isLoggedIn = (loggedAttr === "1");
 
-    // modal elements exist on favorites and search pages
+    // ---- Modal wiring (works on both favorites and search pages) ----
     modalOverlay = document.getElementById("modal-overlay");
-    if (modalOverlay) {
-        modalText    = document.getElementById("modal-text");
-        modalCancel  = document.getElementById("modal-cancel");
-        modalConfirm = document.getElementById("modal-confirm");
+    modalText    = document.getElementById("modal-text");
+    modalCancel  = document.getElementById("modal-cancel");
+    modalConfirm = document.getElementById("modal-confirm");
 
-        modalCancel.addEventListener("click", hideModal);
-        modalConfirm.addEventListener("click", function () {
-            if (typeof modalConfirmHandler === "function") {
-                const handler = modalConfirmHandler;
-                modalConfirmHandler = null;
+    if (modalOverlay) {
+        // Ensure it's hidden by default
+        modalOverlay.classList.add("hidden");
+
+        if (modalCancel) {
+            modalCancel.addEventListener("click", function () {
                 hideModal();
-                handler();
-            } else {
-                hideModal();
-            }
-        });
+            });
+        }
+
+        if (modalConfirm) {
+            modalConfirm.addEventListener("click", function () {
+                if (typeof modalConfirmHandler === "function") {
+                    const handler = modalConfirmHandler;
+                    modalConfirmHandler = null;
+                    hideModal();
+                    handler();              // run the callback (e.g., addFavoriteOnServer)
+                } else {
+                    hideModal();
+                }
+            });
+        }
     }
 
+    // ---- Page-specific init ----
     if (page === "favorites") {
         initFavoritesPage();
     } else if (page === "search") {
@@ -42,6 +57,8 @@ document.addEventListener("DOMContentLoaded", function () {
         initForecastPage();
     }
 });
+
+
 
 // ---------- Modal helpers ----------
 
@@ -126,13 +143,21 @@ function formatLocationLabel(loc) {
 // =====================================================
 
 async function initFavoritesPage() {
-    const listEl     = document.getElementById("favorites-list");
-    const msgEl      = document.getElementById("favorites-message");
-    const addBtn     = document.getElementById("add-location-btn");
+    const listEl   = document.getElementById("favorites-list");
+    const msgEl    = document.getElementById("favorites-message");
+    const addBtn   = document.getElementById("add-location-btn");
 
-    addBtn.addEventListener("click", function () {
-        window.location.href = "search.php";
-    });
+    if (!isLoggedIn) {
+        // Guest: no option to add favorites from the UI
+        if (addBtn) {
+            addBtn.style.display = "none";
+        }
+    } else if (addBtn) {
+        addBtn.addEventListener("click", function () {
+            window.location.href = "search.php";
+        });
+}
+
 
     try {
         await loadFavoritesFromServer();
@@ -211,9 +236,13 @@ async function initSearchPage() {
     const msgEl     = document.getElementById("search-message");
     const backBtn   = document.getElementById("back-to-favorites");
 
-    backBtn.addEventListener("click", function () {
-        window.location.href = "index.php";
-    });
+    // Button is being removed from the UI; guard in case it still exists.
+    if (backBtn) {
+        backBtn.addEventListener("click", function () {
+            window.location.href = "index.php";
+        });
+    }
+
 
     clearBtn.addEventListener("click", function () {
         inputEl.value = "";
@@ -226,10 +255,15 @@ async function initSearchPage() {
     try {
         await loadFavoritesFromServer();
     } catch (err) {
-        msgEl.textContent = "Could not load favorites: " + err.message;
+    // If not logged in, we don't care about favorites here – just stay silent.
+        if (isLoggedIn) {
+            msgEl.textContent = "Could not load favorites: " + err.message;
+        } else {
+            msgEl.textContent = ""; // no error message for guests
+        }
     }
 
-    let searchTimeout = null;
+let searchTimeout = null;
 
     inputEl.addEventListener("input", function () {
         const q = inputEl.value.trim();
@@ -317,7 +351,7 @@ function renderSearchResults(resultsEl, msgEl) {
             return f.id === loc.id;
         });
 
-        if (!alreadyFavorite && !favoritesFull) {
+        if (isLoggedIn && !alreadyFavorite && !favoritesFull) {
             // show green + icon to add (search page ONLY adds)
             const addBtn = document.createElement("button");
             addBtn.className = "icon-btn icon-add";

@@ -1,4 +1,6 @@
 <?php
+session_start();
+$isLoggedIn = isset($_SESSION['user_id']);
 // search.php – Search locations and add to favorites
 ?>
 <!DOCTYPE html>
@@ -8,8 +10,10 @@
     <title>Weather App – Search Location</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body data-page="search">
+<body data-page="search" data-logged-in="<?php echo $isLoggedIn ? '1' : '0'; ?>">
 <div class="app-page">
+
+    <button class="btn-primary" style="margin-bottom: 10px;" onclick="window.location.href='../index.php';">Home</button>
 
     <section class="panel">
         <h2>Search Location</h2>
@@ -25,10 +29,6 @@
         </ul>
 
         <div id="search-message" class="panel-message"></div>
-
-        <button id="back-to-favorites" class="back-btn">
-            ← Back to Favorites
-        </button>
     </section>
 
 </div>
