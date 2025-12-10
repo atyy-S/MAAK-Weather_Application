@@ -1,0 +1,42 @@
+/*
+Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+Click nbfs://nbhost/SystemFileSystem/Templates/Other/CascadeStyleSheet.css to edit this template
+*/
+/* 
+    Created on : Dec 2, 2025, 5:11:30 PM
+    Author     : cwu
+*/
+
+/* Change the paragraph text size */
+.login-link p {
+    font-size: 14px !important;  /* adjust this number to whatever size you want */
+    text-align: center; /* keeps it centered */
+    margin: 15px 0;    /* optional spacing */
+}
+
+/* Optional: keep the link color and hover effect */
+.login-link a {
+    color: #4a90e2;
+    text-decoration: none;
+    transition: color 0.3s;
+}
+
+.login-link a:hover {
+    color: #357abd;
+    text-decoration: underline;
+}
+
+.error-message {
+    position: absolute;
+    top: 10px;              /* adjust upward/downward */
+    left: 50%;
+    transform: translateX(-50%);
+    color: #ff4d4d;
+    font-size: 14px;
+    font-weight: bold;
+    pointer-events: none;   /* doesn't block clicking */
+    z-index: 5;             /* shows above header */
+}
+.wrapper {
+    position: relative !important; /* allows absolute positioning inside */
+}
